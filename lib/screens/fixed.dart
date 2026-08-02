@@ -17,18 +17,46 @@ class _FixedScreenState extends State<FixedScreen> {
   final _label = TextEditingController();
   final _amount = TextEditingController();
   final _day = TextEditingController(text: '1');
-  final _category = TextEditingController();
+  String _category = '';
   String _type = 'expense';
   String _method = 'transfer';
   bool _busy = false;
+  List<dynamic> _cats = [];
 
   @override
   void initState() {
     super.initState();
     _f = _api.fixed();
+    _loadCats();
   }
 
   void _reload() => setState(() => _f = _api.fixed());
+  Future<void> _loadCats() async {
+    try {
+      final c = await _api.categories();
+      if (mounted) setState(() => _cats = c);
+    } catch (_) {}
+  }
+
+  List<String> get _catNames => _cats.map((c) => asStr(c['name'])).toList();
+
+  Future<void> _apply() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context, initialDate: now, firstDate: DateTime(2000), lastDate: DateTime(2100),
+      helpText: '반영할 달 선택 (날짜는 무관)',
+    );
+    if (picked == null) return;
+    final ym = '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}';
+    try {
+      await _api.applyFixed(ym);
+      _reload();
+      messenger.showSnackBar(SnackBar(content: Text('$ym 고정비 반영 완료')));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
 
   Future<void> _add() async {
     if (_busy) return;
@@ -41,11 +69,11 @@ class _FixedScreenState extends State<FixedScreen> {
         'amount': _amount.text,
         'day': _day.text,
         'method': _method,
-        'category': _category.text.trim(),
+        'category': _category,
       });
       _label.clear();
       _amount.clear();
-      _category.clear();
+      _category = '';
       _reload();
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('$e')));
@@ -77,7 +105,6 @@ class _FixedScreenState extends State<FixedScreen> {
     _label.dispose();
     _amount.dispose();
     _day.dispose();
-    _category.dispose();
     super.dispose();
   }
 
@@ -86,6 +113,20 @@ class _FixedScreenState extends State<FixedScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('고정비 반영', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              const Text('선택한 달에 활성 고정항목을 실제 거래로 반영합니다. 이미 반영된 항목은 건너뜁니다.',
+                  style: TextStyle(fontSize: 12, color: Colors.black54)),
+              const SizedBox(height: 10),
+              FilledButton.icon(onPressed: _apply, icon: const Icon(Icons.event_available), label: const Text('달 선택해 반영')),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 12),
         FutureBuilder<Map<String, dynamic>>(
           future: _f,
           builder: (context, snap) {
@@ -206,7 +247,21 @@ class _FixedScreenState extends State<FixedScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Expanded(child: TextField(controller: _category, decoration: const InputDecoration(labelText: '카테고리', border: OutlineInputBorder()))),
+            Expanded(
+              child: DropdownButtonFormField<String>(
+                key: ValueKey('fc$_category'),
+                initialValue: _category.isEmpty ? null : _category,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: '카테고리', border: OutlineInputBorder()),
+                items: [
+                  const DropdownMenuItem<String>(value: null, child: Text('(선택)')),
+                  if (_category.isNotEmpty && !_catNames.contains(_category))
+                    DropdownMenuItem<String>(value: _category, child: Text(_category)),
+                  for (final n in _catNames) DropdownMenuItem<String>(value: n, child: Text(n)),
+                ],
+                onChanged: (v) => setState(() => _category = v ?? ''),
+              ),
+            ),
           ]),
           const SizedBox(height: 12),
           FilledButton(onPressed: _busy ? null : _add, child: const Text('추가')),

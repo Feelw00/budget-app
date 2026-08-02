@@ -16,7 +16,8 @@ class _PresetsScreenState extends State<PresetsScreen> {
 
   final _label = TextEditingController();
   final _amount = TextEditingController();
-  final _category = TextEditingController();
+  String _category = '';
+  List<dynamic> _cats = [];
   String _type = 'expense';
   String _method = 'cash';
   bool _busy = false;
@@ -25,9 +26,18 @@ class _PresetsScreenState extends State<PresetsScreen> {
   void initState() {
     super.initState();
     _f = _api.presets();
+    _loadCats();
   }
 
   void _reload() => setState(() => _f = _api.presets());
+  Future<void> _loadCats() async {
+    try {
+      final c = await _api.categories();
+      if (mounted) setState(() => _cats = c);
+    } catch (_) {}
+  }
+
+  List<String> get _catNames => _cats.map((c) => asStr(c['name'])).toList();
 
   Future<void> _add() async {
     if (_busy) return;
@@ -38,12 +48,12 @@ class _PresetsScreenState extends State<PresetsScreen> {
         'label': _label.text.trim(),
         'type': _type,
         'amount': _amount.text,
-        'category': _category.text.trim(),
+        'category': _category,
         'method': _method,
       });
       _label.clear();
       _amount.clear();
-      _category.clear();
+      _category = '';
       _reload();
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('$e')));
@@ -65,7 +75,6 @@ class _PresetsScreenState extends State<PresetsScreen> {
   void dispose() {
     _label.dispose();
     _amount.dispose();
-    _category.dispose();
     super.dispose();
   }
 
@@ -112,7 +121,19 @@ class _PresetsScreenState extends State<PresetsScreen> {
                 ),
               ]),
               const SizedBox(height: 10),
-              TextField(controller: _category, decoration: const InputDecoration(labelText: '카테고리', border: OutlineInputBorder())),
+              DropdownButtonFormField<String>(
+                key: ValueKey('pc$_category'),
+                initialValue: _category.isEmpty ? null : _category,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: '카테고리', border: OutlineInputBorder()),
+                items: [
+                  const DropdownMenuItem<String>(value: null, child: Text('(선택)')),
+                  if (_category.isNotEmpty && !_catNames.contains(_category))
+                    DropdownMenuItem<String>(value: _category, child: Text(_category)),
+                  for (final n in _catNames) DropdownMenuItem<String>(value: n, child: Text(n)),
+                ],
+                onChanged: (v) => setState(() => _category = v ?? ''),
+              ),
               const SizedBox(height: 12),
               FilledButton(onPressed: _busy ? null : _add, child: const Text('추가')),
             ]),

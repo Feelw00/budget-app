@@ -6,6 +6,8 @@ import 'input.dart';
 import 'detail.dart';
 import 'presets.dart';
 import 'fixed.dart';
+import 'holdings.dart';
+import 'categories.dart';
 import 'account.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -23,6 +25,8 @@ class _HomeScreenState extends State<HomeScreen> {
     (Icons.list_alt, '상세'),
     (Icons.bolt_outlined, '프리셋'),
     (Icons.repeat, '고정·급여'),
+    (Icons.account_balance_wallet_outlined, '소지금'),
+    (Icons.label_outline, '카테고리'),
     (Icons.settings_outlined, '설정'),
   ];
 
@@ -38,6 +42,10 @@ class _HomeScreenState extends State<HomeScreen> {
         return const PresetsScreen();
       case 4:
         return const FixedScreen();
+      case 5:
+        return const HoldingsScreen();
+      case 6:
+        return const CategoriesScreen();
       default:
         return const AccountScreen();
     }

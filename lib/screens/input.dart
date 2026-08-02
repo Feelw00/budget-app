@@ -17,12 +17,13 @@ class _InputScreenState extends State<InputScreen> {
   String _type = 'expense';
   String _method = 'cash';
   final _amount = TextEditingController();
-  final _category = TextEditingController();
+  String _category = '';
   final _memo = TextEditingController();
   bool _busy = false;
 
   List<dynamic> _presets = [];
   List<dynamic> _recent = [];
+  List<dynamic> _cats = [];
   bool _loading = true;
   String? _error;
 
@@ -40,10 +41,12 @@ class _InputScreenState extends State<InputScreen> {
     try {
       final p = await _api.presets();
       final r = await _api.transactions(limit: 20);
+      final c = await _api.categories();
       if (!mounted) return;
       setState(() {
         _presets = p;
         _recent = r;
+        _cats = c;
         _loading = false;
       });
     } catch (e) {
@@ -59,7 +62,7 @@ class _InputScreenState extends State<InputScreen> {
     setState(() {
       _type = asStr(p['type']);
       _amount.text = asInt(p['amount']) > 0 ? '${asInt(p['amount'])}' : '';
-      _category.text = asStr(p['category']);
+      _category = asStr(p['category']);
       _method = asStr(p['method']);
     });
   }
@@ -88,7 +91,7 @@ class _InputScreenState extends State<InputScreen> {
         'dt': _date,
         'type': _type,
         'amount': _amount.text,
-        'category': _category.text.trim(),
+        'category': _category,
         'method': _method,
         'memo': _memo.text.trim(),
       });
@@ -127,10 +130,11 @@ class _InputScreenState extends State<InputScreen> {
   @override
   void dispose() {
     _amount.dispose();
-    _category.dispose();
     _memo.dispose();
     super.dispose();
   }
+
+  List<String> get _catNames => _cats.map((c) => asStr(c['name'])).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -173,6 +177,7 @@ class _InputScreenState extends State<InputScreen> {
                 Row(children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
+                      key: ValueKey('m$_method'),
                       initialValue: _method,
                       decoration: const InputDecoration(labelText: '수단', border: OutlineInputBorder()),
                       items: const [
@@ -185,9 +190,18 @@ class _InputScreenState extends State<InputScreen> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: TextField(
-                      controller: _category,
+                    child: DropdownButtonFormField<String>(
+                      key: ValueKey('c$_category'),
+                      initialValue: _category.isEmpty ? null : _category,
+                      isExpanded: true,
                       decoration: const InputDecoration(labelText: '카테고리', border: OutlineInputBorder()),
+                      items: [
+                        const DropdownMenuItem<String>(value: null, child: Text('(선택)')),
+                        if (_category.isNotEmpty && !_catNames.contains(_category))
+                          DropdownMenuItem<String>(value: _category, child: Text(_category)),
+                        for (final n in _catNames) DropdownMenuItem<String>(value: n, child: Text(n)),
+                      ],
+                      onChanged: (v) => setState(() => _category = v ?? ''),
                     ),
                   ),
                 ]),

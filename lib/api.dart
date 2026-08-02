@@ -93,6 +93,17 @@ class ApiClient {
 
   Future<void> changePassword(String current, String next) async =>
       await _post('/api/account/password', {'current': current, 'next': next});
+
+  Future<List<dynamic>> categories() async => await _get('/api/categories') as List<dynamic>;
+  Future<void> addCategory(String name) async => await _post('/api/categories', {'name': name});
+  Future<void> delCategory(int id) async => await _delete('/api/categories/$id');
+
+  Future<Map<String, dynamic>> holdings() async => await _get('/api/holdings') as Map<String, dynamic>;
+  Future<void> addHolding(Map<String, dynamic> b) async => await _post('/api/holdings', b);
+  Future<void> updateHolding(int id, String amount) async => await _post('/api/holdings/$id', {'amount': amount});
+  Future<void> delHolding(int id) async => await _delete('/api/holdings/$id');
+
+  Future<void> applyFixed(String ym) async => await _post('/api/fixed/apply', {'ym': ym});
 }
 
 /// JSON 숫자 → int (SQLite 정수 금액)

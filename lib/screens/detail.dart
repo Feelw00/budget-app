@@ -15,7 +15,7 @@ class DetailScreen extends StatefulWidget {
 class _DetailScreenState extends State<DetailScreen> {
   ApiClient get _api => context.read<AuthState>().api;
 
-  String _mode = 'month'; // week | month | year
+  String _mode = 'month';
   DateTime _anchor = DateTime.now();
   late Future<Map<String, dynamic>> _f;
 
@@ -26,8 +26,7 @@ class _DetailScreenState extends State<DetailScreen> {
   }
 
   String get _ym => '${_anchor.year.toString().padLeft(4, '0')}-${_pad2(_anchor.month)}';
-  String get _date =>
-      '${_anchor.year.toString().padLeft(4, '0')}-${_pad2(_anchor.month)}-${_pad2(_anchor.day)}';
+  String get _date => '${_anchor.year.toString().padLeft(4, '0')}-${_pad2(_anchor.month)}-${_pad2(_anchor.day)}';
 
   Future<Map<String, dynamic>> _fetch() {
     switch (_mode) {
@@ -41,38 +40,23 @@ class _DetailScreenState extends State<DetailScreen> {
   }
 
   void _reload() => setState(() => _f = _fetch());
+  void _setMode(String m) => setState(() {
+        _mode = m;
+        _anchor = DateTime.now();
+        _f = _fetch();
+      });
+  void _shift(int dir) => setState(() {
+        if (_mode == 'week') {
+          _anchor = _anchor.add(Duration(days: 7 * dir));
+        } else if (_mode == 'year') {
+          _anchor = DateTime(_anchor.year + dir, _anchor.month, 1);
+        } else {
+          _anchor = DateTime(_anchor.year, _anchor.month + dir, 1);
+        }
+        _f = _fetch();
+      });
 
-  void _setMode(String m) {
-    setState(() {
-      _mode = m;
-      _anchor = DateTime.now();
-      _f = _fetch();
-    });
-  }
-
-  void _shift(int dir) {
-    setState(() {
-      if (_mode == 'week') {
-        _anchor = _anchor.add(Duration(days: 7 * dir));
-      } else if (_mode == 'year') {
-        _anchor = DateTime(_anchor.year + dir, _anchor.month, 1);
-      } else {
-        _anchor = DateTime(_anchor.year, _anchor.month + dir, 1);
-      }
-      _f = _fetch();
-    });
-  }
-
-  String get _periodLabel {
-    switch (_mode) {
-      case 'week':
-        return _date;
-      case 'year':
-        return '${_anchor.year}년';
-      default:
-        return _ym;
-    }
-  }
+  String get _periodLabel => _mode == 'week' ? _date : (_mode == 'year' ? '${_anchor.year}년' : _ym);
 
   @override
   Widget build(BuildContext context) {
@@ -165,6 +149,29 @@ class _DetailScreenState extends State<DetailScreen> {
         ),
       );
 
+  Widget _card(String title, Widget child) => Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            child,
+          ]),
+        ),
+      );
+
+  Widget _splitLine(Map<String, dynamic> d) {
+    final f = (d['fixed'] as Map).cast<String, dynamic>();
+    final v = (d['variable'] as Map).cast<String, dynamic>();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        '유동 +${krw(asInt(v['income']))}/-${krw(asInt(v['expense']))} · 고정 +${krw(asInt(f['income']))}/-${krw(asInt(f['expense']))}',
+        style: const TextStyle(color: Colors.black54, fontSize: 12),
+      ),
+    );
+  }
+
   Widget _categoryBars(List<dynamic> cats) {
     if (cats.isEmpty) return const Text('지출이 없습니다.', style: TextStyle(color: Colors.black54));
     final maxV = cats.map((c) => asInt(c['s'])).fold<int>(0, (a, b) => a > b ? a : b);
@@ -199,46 +206,36 @@ class _DetailScreenState extends State<DetailScreen> {
         ListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
-          title: Text('${asStr(t['dt'])} · ${asStr(t['category']).isEmpty ? '(미분류)' : asStr(t['category'])}'),
-          subtitle: Text('${methodLabel(asStr(t['method']))}${asStr(t['memo']).isEmpty ? '' : ' · ${asStr(t['memo'])}'}'),
+          title: Text('${asStr(t['dt'])} · ${asStr(t['memo']).isNotEmpty ? asStr(t['memo']) : (asStr(t['category']).isEmpty ? '(미분류)' : asStr(t['category']))}'),
+          subtitle: Text('${methodLabel(asStr(t['method']))}${asStr(t['category']).isEmpty ? '' : ' · ${asStr(t['category'])}'}'),
           trailing: Text(signed(asStr(t['type']), asInt(t['amount'])),
               style: TextStyle(color: asStr(t['type']) == 'income' ? incomeColor : expenseColor, fontWeight: FontWeight.bold)),
         ),
     ]);
   }
 
+  // 유동 우선 표기
   Widget _monthBody(Map<String, dynamic> d) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('카드 사용 ${krw(asInt(d['cardMonth']))}', style: const TextStyle(color: Colors.black54, fontSize: 12)),
+    final fixedItems = d['fixedItems'] as List<dynamic>;
+    return Column(children: [
+      _splitLine(d),
+      _card('유동 지출 — 카테고리별', _categoryBars(d['varCategories'] as List<dynamic>)),
       const SizedBox(height: 12),
-      Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('카테고리별 지출', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        _categoryBars(d['categories'] as List<dynamic>),
-      ]))),
+      _card('유동 거래 내역', _txList(d['varItems'] as List<dynamic>)),
       const SizedBox(height: 12),
-      Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('거래 내역', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 4),
-        _txList(d['items'] as List<dynamic>),
-      ]))),
+      _card('고정 항목', fixedItems.isEmpty
+          ? const Text('이 달에 반영된 고정 항목이 없습니다. 고정·급여 탭에서 “이 달에 반영”을 눌러주세요.', style: TextStyle(color: Colors.black54))
+          : _txList(fixedItems)),
     ]);
   }
 
-  Widget _weekBody(Map<String, dynamic> d) {
-    return Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('거래 내역', style: Theme.of(context).textTheme.titleMedium),
-      const SizedBox(height: 4),
-      _txList(d['items'] as List<dynamic>),
-    ])));
-  }
+  Widget _weekBody(Map<String, dynamic> d) => _card('거래 내역', _txList(d['items'] as List<dynamic>));
 
   Widget _yearBody(Map<String, dynamic> d) {
     final months = d['months'] as List<dynamic>;
     return Column(children: [
-      Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('월별', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 4),
+      _splitLine(d),
+      _card('월별 (고정 포함)', Column(children: [
         for (final m in months)
           () {
             final inc = asInt(m['income']);
@@ -253,13 +250,11 @@ class _DetailScreenState extends State<DetailScreen> {
               subtitle: has ? Text('수입 ${krw(inc)} · 지출 ${krw(exp)}', style: const TextStyle(fontSize: 11)) : null,
             );
           }(),
-      ]))),
+      ])),
       const SizedBox(height: 12),
-      Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('카테고리별 지출 (연간)', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        _categoryBars(d['categories'] as List<dynamic>),
-      ]))),
+      _card('유동 지출 — 카테고리별', _categoryBars(d['varCategories'] as List<dynamic>)),
+      const SizedBox(height: 12),
+      _card('고정 지출 — 카테고리별', _categoryBars(d['fixedCategories'] as List<dynamic>)),
     ]);
   }
 }

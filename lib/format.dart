@@ -17,6 +17,8 @@ Color amountColor(num n) => n < 0 ? expenseColor : const Color(0xFF1F2430);
 
 String typeLabel(String t) => t == 'income' ? '수입' : '지출';
 String methodLabel(String m) => const {'cash': '현금', 'card': '카드', 'transfer': '이체'}[m] ?? m;
+String holdingLabel(String t) => const {'account': '계좌', 'stock': '주식', 'cash': '현금', 'other': '기타'}[t] ?? t;
+const List<String> holdingTypes = ['account', 'stock', 'cash', 'other'];
 
 String todayStr() {
   final now = DateTime.now();
