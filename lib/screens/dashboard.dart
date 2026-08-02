@@ -47,10 +47,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               if ((holdings['items'] as List).isNotEmpty) ...[_holdingsCard(holdings), const SizedBox(height: 12)],
               _periodGrid(d),
               const SizedBox(height: 16),
-              _chartCard('올해 월별 수입·지출', _yearChart(chart), legend: true),
+              _chartCard('${asStr(d['ym'])} 일별 유동 지출', _dailyChart(chart), subtitle: '점선 = 일 예산 (고정수입−고정지출)/30'),
               const SizedBox(height: 12),
-              _chartCard('${asStr(d['ym'])} 일별 유동 지출',
-                  _dailyChart(chart), subtitle: '점선 = 일 예산 (고정수입−고정지출)/30'),
+              _chartCard('${asStr(d['ym'])} 주간 유동 지출', _weekChart(chart), subtitle: '점선 = 주 예산 (고정수입−고정지출)/30×7'),
+              const SizedBox(height: 12),
+              _chartCard('${asStr(d['ym'])} 누적 유동 지출', _cumChart(chart), subtitle: '점선 = 이번 달 예산 (고정수입−고정지출) · 넘으면 초과'),
+              const SizedBox(height: 12),
+              _chartCard('올해 월별 수입·지출', _yearChart(chart), legend: true),
             ],
           );
         },
@@ -196,6 +199,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
       barGroups: [
         for (int i = 0; i < exp.length; i++)
           BarChartGroupData(x: i, barRods: [BarChartRodData(toY: exp[i], color: expenseColor, width: 3)]),
+      ],
+    ));
+  }
+
+  Widget _weekChart(Map<String, dynamic> chart) {
+    final exp = (chart['weekExpense'] as List).map((e) => (e as num).toDouble()).toList();
+    final labels = (chart['weekLabels'] as List).map((e) => e.toString()).toList();
+    final budget = (chart['weeklyBudget'] as num?)?.toDouble() ?? 0;
+    return BarChart(BarChartData(
+      gridData: const FlGridData(show: false),
+      borderData: FlBorderData(show: false),
+      titlesData: _titles((v) => v.toInt() >= 0 && v.toInt() < labels.length ? labels[v.toInt()] : ''),
+      extraLinesData: budget > 0
+          ? ExtraLinesData(horizontalLines: [HorizontalLine(y: budget, color: incomeColor, strokeWidth: 1.5, dashArray: [6, 4])])
+          : const ExtraLinesData(),
+      barGroups: [
+        for (int i = 0; i < exp.length; i++)
+          BarChartGroupData(x: i, barRods: [BarChartRodData(toY: exp[i], color: expenseColor, width: 14)]),
+      ],
+    ));
+  }
+
+  Widget _cumChart(Map<String, dynamic> chart) {
+    final cum = (chart['cumExpense'] as List).map((e) => (e as num).toDouble()).toList();
+    final budget = (chart['monthlyBudget'] as num?)?.toDouble() ?? 0;
+    return LineChart(LineChartData(
+      gridData: const FlGridData(show: false),
+      borderData: FlBorderData(show: false),
+      titlesData: _titles((v) => '${v.toInt() + 1}'),
+      extraLinesData: budget > 0
+          ? ExtraLinesData(horizontalLines: [HorizontalLine(y: budget, color: incomeColor, strokeWidth: 1.5, dashArray: [6, 4])])
+          : const ExtraLinesData(),
+      lineBarsData: [
+        LineChartBarData(
+          spots: [for (int i = 0; i < cum.length; i++) FlSpot(i.toDouble(), cum[i])],
+          isCurved: false, color: expenseColor, barWidth: 2,
+          dotData: const FlDotData(show: false),
+          belowBarData: BarAreaData(show: true, color: const Color(0x14DC2626)),
+        ),
       ],
     ));
   }
